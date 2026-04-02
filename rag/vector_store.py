@@ -63,7 +63,7 @@ class VectorStoreService:
 
         allowed_files_path: list[str] = listdir_with_allowed_type(
             get_abs_path(chroma_conf["data_path"]),
-            tuple(chroma_conf["allow_knowledge_file_type"]),
+            tuple(chroma_conf["allow_knowledge_file_type"]), #配置中是list，转为tuple
         )
 
         for path in allowed_files_path:
