@@ -16,6 +16,7 @@ export default function ChatPage() {
   const [activeConvId, setActiveConvId] = useState(null)
   const [messages, setMessages] = useState([])
   const [streaming, setStreaming] = useState(false)
+  const [thinking, setThinking] = useState(false)
   const [streamText, setStreamText] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
@@ -107,6 +108,7 @@ export default function ChatPage() {
     const userMsg = { id: Date.now(), role: 'user', content: text, created_at: new Date().toLocaleString() }
     setMessages(prev => [...prev, userMsg])
     setStreaming(true)
+    setThinking(true)
     setStreamText('')
 
     let fullResponse = ''
@@ -116,6 +118,7 @@ export default function ChatPage() {
       text,
       // onChunk
       (chunk) => {
+        setThinking(false)
         fullResponse += chunk
         setStreamText(fullResponse)
       },
@@ -129,6 +132,7 @@ export default function ChatPage() {
         }
         setStreamText('')
         setStreaming(false)
+        setThinking(false)
         loadConversations() // 刷新对话列表（标题可能更新了）
       },
       // onError
@@ -139,6 +143,7 @@ export default function ChatPage() {
         ])
         setStreamText('')
         setStreaming(false)
+        setThinking(false)
       }
     )
   }
@@ -154,6 +159,7 @@ export default function ChatPage() {
     }
     setStreamText('')
     setStreaming(false)
+    setThinking(false)
   }
 
   return (
@@ -215,6 +221,29 @@ export default function ChatPage() {
             <ChatMessage key={msg.id} message={msg} />
           ))}
 
+          {/* AI 思考中指示器 */}
+          {thinking && (
+            <div className="thinking-indicator">
+              <div className="thinking-avatar">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="5" stroke="currentColor" strokeWidth="1.5" />
+                  <circle cx="9" cy="9" r="2" fill="currentColor" />
+                  <path d="M9 14l-2 3M9 14l2 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="thinking-content">
+                <span className="thinking-label">智扫通</span>
+                <div className="thinking-dots">
+                  <span className="dot"></span>
+                  <span className="dot"></span>
+                  <span className="dot"></span>
+                  <span className="thinking-text">思考中</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 流式输出的消息 */}
           {streaming && streamText && (
             <ChatMessage
               message={{ role: 'assistant', content: streamText }}
@@ -229,7 +258,7 @@ export default function ChatPage() {
         <ChatInput
           onSend={handleSend}
           onStop={handleStop}
-          disabled={!activeConvId && !streaming}
+          disabled={false}
           streaming={streaming}
         />
       </main>

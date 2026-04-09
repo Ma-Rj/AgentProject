@@ -1,3 +1,4 @@
+import re
 from langchain.agents import create_agent
 from model.factory import chat_model
 from utils.prompt_loader import load_system_prompts
@@ -6,6 +7,9 @@ from agent.tools.agent_tools import (rag_summarize, get_weather, get_user_locati
 from agent.tools.middleware import monitor_tool, log_before_model, report_prompt_switch
 from agent.tools.user_context import set_user_context
 from utils.logger_hander import logger
+
+# 正则：匹配 <think>...</think> 思考块（qwen3 模型会输出）
+THINK_PATTERN = re.compile(r'<think>.*?</think>', re.DOTALL)
 
 
 class ReactAgent:
@@ -27,7 +31,7 @@ class ReactAgent:
         db_session=None,
     ):
         """
-        执行 Agent 流式推理
+        执行 Agent 流式推理（逐 token 输出）
 
         :param query: 当前用户输入
         :param user_id: 当前认证用户 ID
@@ -57,11 +61,55 @@ class ReactAgent:
 
         logger.info(f"[ReactAgent] 开始推理, user_id={user_id}, 历史消息数={len(messages) - 1}")
 
-        # 第三个参数 context 就是上下文 runtime 中的信息，用于提示词切换标记
-        for chunk in self.agent.stream(input_dict, stream_mode="values", context={"report": False}):
-            latest_message = chunk["messages"][-1]
-            if latest_message.content:
-                yield latest_message.content.strip() + "\n"
+        # 使用 stream_mode="messages" 实现逐 token 流式输出
+        # 每个 event 是 (message_chunk, metadata) 元组
+        in_think_block = False  # 追踪是否在 <think> 块内
+
+        for event in self.agent.stream(input_dict, stream_mode="messages", context={"report": False}):
+            msg_chunk, metadata = event
+
+            # 只处理 AI 消息（跳过 Human/Tool 消息）
+            if not hasattr(msg_chunk, 'type') or msg_chunk.type != "ai":
+                continue
+
+            # 跳过工具调用消息（中间推理步骤）
+            if hasattr(msg_chunk, 'tool_calls') and msg_chunk.tool_calls:
+                continue
+            if hasattr(msg_chunk, 'tool_call_chunks') and msg_chunk.tool_call_chunks:
+                continue
+
+            content = msg_chunk.content
+            if not content:
+                continue
+
+            # ===== 过滤 <think>...</think> 思考块 =====
+            # qwen3-max 模型会输出 <think>思考过程</think> 标签
+            # 需要逐 chunk 处理，因为标签可能跨越多个 chunk
+
+            # 检查是否进入 think 块
+            if '<think>' in content:
+                in_think_block = True
+                # 保留 <think> 之前的内容
+                before_think = content.split('<think>')[0]
+                if before_think.strip():
+                    yield before_think
+                continue
+
+            # 检查是否离开 think 块
+            if '</think>' in content:
+                in_think_block = False
+                # 保留 </think> 之后的内容
+                after_think = content.split('</think>')[-1]
+                if after_think.strip():
+                    yield after_think
+                continue
+
+            # 在 think 块内，跳过
+            if in_think_block:
+                continue
+
+            # 正常内容，直接输出
+            yield content
 
 
 # 全局单例 Agent（避免每次请求重复初始化）
