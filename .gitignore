@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+logs/*.log
+
+# ChromaDB
+chroma_db/
+agent/chroma_db/
+agent/tools/chroma_db/
+rag/chroma_db/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS
+Thumbs.db
+.DS_Store

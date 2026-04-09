@@ -1,18 +1,19 @@
 import os
+from datetime import datetime
 from utils.logger_hander import logger
 from langchain_core.tools import tool
 from rag.rag_service import RagSummarizeService
-import random
-from utils.config_handler import agent_conf
-from utils.path_tool import get_abs_path
+from agent.tools.user_context import get_user_id_from_context, get_user_city_from_context, get_db_session_from_context
+from dotenv import load_dotenv
+import httpx
+
+load_dotenv()
 
 rag = RagSummarizeService()
 
-user_ids = ["1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010",]
-month_arr = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06",
-             "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", ]
-
-external_data = {}
+# 天气 API 配置
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")
+WEATHER_API_PROVIDER = os.getenv("WEATHER_API_PROVIDER", "weatherapi")
 
 
 @tool(description="从向量存储中检索参考资料")
@@ -22,88 +23,116 @@ def rag_summarize(query: str) -> str:
 
 @tool(description="获取指定城市的天气，以消息字符串的形式返回")
 def get_weather(city: str) -> str:
-    return f"城市{city}天气为晴天，气温26摄氏度，空气湿度50%，南风1级，AQI21，最近6小时降雨概率极低"
+    """
+    调用 weatherapi.com 真实天气 API
+    获取指定城市的实时天气信息
+    """
+    if not WEATHER_API_KEY:
+        logger.warning("[get_weather] 未配置 WEATHER_API_KEY，返回默认天气")
+        return f"城市{city}天气信息暂时无法获取（API Key 未配置）"
+
+    try:
+        url = "http://api.weatherapi.com/v1/current.json"
+        params = {
+            "key": WEATHER_API_KEY,
+            "q": city,
+            "lang": "zh",
+        }
+
+        with httpx.Client(timeout=10) as client:
+            response = client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+        current = data.get("current", {})
+        location = data.get("location", {})
+
+        weather_info = (
+            f"城市：{location.get('name', city)}（{location.get('region', '')}）\n"
+            f"天气状况：{current.get('condition', {}).get('text', '未知')}\n"
+            f"温度：{current.get('temp_c', '--')}°C（体感温度：{current.get('feelslike_c', '--')}°C）\n"
+            f"空气湿度：{current.get('humidity', '--')}%\n"
+            f"风况：{current.get('wind_dir', '')}风 {current.get('wind_kph', '--')}km/h\n"
+            f"空气质量指数(AQI)：{current.get('air_quality', {}).get('pm2_5', '暂无数据')}\n"
+            f"紫外线指数：{current.get('uv', '--')}\n"
+            f"降水量：{current.get('precip_mm', 0)}mm"
+        )
+
+        logger.info(f"[get_weather] 成功获取 {city} 天气")
+        return weather_info
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[get_weather] API 请求失败: {e.response.status_code}")
+        return f"获取{city}天气信息失败，请稍后重试"
+    except Exception as e:
+        logger.error(f"[get_weather] 获取天气异常: {str(e)}", exc_info=True)
+        return f"获取{city}天气信息失败: {str(e)}"
 
 
 @tool(description="获取用户所在城市的名称，以纯字符串形式返回")
 def get_user_location() -> str:
-    return random.choice(["深圳", "合肥", "杭州","北京","上海"])
+    """从当前认证用户的数据库记录中获取城市"""
+    city = get_user_city_from_context()
+    if city:
+        logger.info(f"[get_user_location] 获取用户城市: {city}")
+        return city
+    return "用户未设置所在城市，请先在个人设置中设置城市信息"
 
 
 @tool(description="获取用户的ID，以纯字符串形式返回")
 def get_user_id() -> str:
-    return random.choice(user_ids)
+    """从当前认证用户上下文中获取真实用户 ID"""
+    user_id = get_user_id_from_context()
+    if user_id > 0:
+        logger.info(f"[get_user_id] 获取用户 ID: {user_id}")
+        return str(user_id)
+    return "无法获取用户ID，用户未登录"
 
 
 @tool(description="获取当前月份，以纯字符串形式返回")
 def get_current_month() -> str:
-    return random.choice(month_arr)
+    """使用系统时间获取当前月份"""
+    current_month = datetime.now().strftime("%Y-%m")
+    logger.info(f"[get_current_month] 当前月份: {current_month}")
+    return current_month
 
 
-def generate_external_data():
-    """
-    {
-        "user_id": {
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            ...
-        },
-        "user_id": {
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            ...
-        },
-        "user_id": {
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            ...
-        },
-        ...
-    }
-    :return:
-    """
-    if not external_data:
-        external_data_path = get_abs_path(agent_conf["external_data_path"])
-
-        if not os.path.exists(external_data_path):
-            raise FileNotFoundError(f"外部数据文件{external_data_path}不存在")
-
-        with open(external_data_path, "r", encoding="utf-8") as f:
-            for line in f.readlines()[1:]:
-                arr: list[str] = line.strip().split(",")
-
-                user_id: str = arr[0].replace('"', "")
-                feature: str = arr[1].replace('"', "")
-                efficiency: str = arr[2].replace('"', "")
-                consumables: str = arr[3].replace('"', "")
-                comparison: str = arr[4].replace('"', "")
-                time: str = arr[5].replace('"', "")
-
-                if user_id not in external_data:
-                    external_data[user_id] = {}
-
-                external_data[user_id][time] = {
-                    "特征": feature,
-                    "效率": efficiency,
-                    "耗材": consumables,
-                    "对比": comparison,
-                }
-
-@tool(description="从外部系统中获取指定用户在指定月份的使用记录，以纯字符串形式返回， 如果未检索到返回空字符串")
+@tool(description="从外部系统中获取指定用户在指定月份的使用记录，以纯字符串形式返回，如果未检索到返回空字符串")
 def fetch_external_data(user_id: str, month: str) -> str:
-    generate_external_data()
+    """
+    从 MySQL 数据库查询设备使用记录
+    替代原来的 CSV 文件解析
+    """
+    db = get_db_session_from_context()
+    if db is None:
+        logger.error("[fetch_external_data] 无法获取数据库 Session")
+        return ""
 
     try:
-        return external_data[user_id][month]
-    except KeyError:
-        logger.warning(f"[fetch_external_data]未能检索到用户：{user_id}在{month}的使用记录数据")
+        from db.crud import get_device_record
+        record = get_device_record(db, int(user_id), month)
+
+        if record is None:
+            logger.warning(f"[fetch_external_data] 未找到用户 {user_id} 在 {month} 的记录")
+            return ""
+
+        result = (
+            f"用户ID: {user_id}\n"
+            f"月份: {month}\n"
+            f"用户特征: {record.feature}\n"
+            f"清洁效率: {record.efficiency}\n"
+            f"耗材状态: {record.consumables}\n"
+            f"使用对比: {record.comparison}"
+        )
+
+        logger.info(f"[fetch_external_data] 成功检索用户 {user_id} 在 {month} 的使用记录")
+        return result
+
+    except Exception as e:
+        logger.error(f"[fetch_external_data] 查询失败: {str(e)}", exc_info=True)
         return ""
 
 
 @tool(description="调用后触发中间件自动为报告生成的场景动态注入上下文信息，为后续提示词切换提供上下文信息")
 def fill_context_for_report():
     return "fill_context_for_report已调用"
-

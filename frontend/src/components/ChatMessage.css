@@ -1,0 +1,149 @@
+/* ==================== Message ==================== */
+.message {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  animation: fadeIn 0.3s ease;
+  max-width: 820px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* 头像 */
+.message-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.avatar-user {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.avatar-bot {
+  background: linear-gradient(135deg, var(--primary), #4ECDC4);
+  color: white;
+}
+
+/* 内容 */
+.message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-role {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.message-body {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.75;
+  word-wrap: break-word;
+}
+
+/* Markdown 内容样式 */
+.message-body p {
+  margin-bottom: 10px;
+}
+
+.message-body p:last-child {
+  margin-bottom: 0;
+}
+
+.message-body h1, .message-body h2, .message-body h3 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+
+.message-body h1 { font-size: 20px; }
+.message-body h2 { font-size: 17px; }
+.message-body h3 { font-size: 15px; }
+
+.message-body ul, .message-body ol {
+  padding-left: 20px;
+  margin-bottom: 10px;
+}
+
+.message-body li {
+  margin-bottom: 4px;
+}
+
+.message-body code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #E879F9;
+}
+
+.message-body pre {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.message-body pre code {
+  background: none;
+  padding: 0;
+  color: var(--text-primary);
+}
+
+.message-body strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.message-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.message-body th, .message-body td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.message-body th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+}
+
+.message-body blockquote {
+  border-left: 3px solid var(--primary);
+  padding: 8px 16px;
+  margin: 10px 0;
+  color: var(--text-secondary);
+  background: var(--primary-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* 流式光标 */
+.cursor-blink {
+  display: inline-block;
+  color: var(--primary);
+  animation: typing 1s infinite;
+  margin-left: 2px;
+}
+
+/* 流式消息区分 */
+.message.streaming .message-body {
+  padding-bottom: 4px;
+}
